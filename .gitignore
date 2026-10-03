@@ -1,0 +1,19 @@
+# Virtual environments and caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+
+# Backup and scratch scripts
+app_backup*.py
+app_updated_3d*.py
+app_pre_upgrade_backup.py
+update_app.py
+*.log
+
+# Binaries
+cloudflared.exe
