@@ -1634,6 +1634,13 @@ if not st.session_state.logged_in:
                     else:
                         st.error("❌ Invalid email or password.")
 
+            st.markdown("<div style='text-align:center; margin: 0.5rem 0; color: #94a3b8; font-size: 0.85rem;'>— OR —</div>", unsafe_allow_html=True)
+            if st.button("🚀 Explore Demo / Evaluator Mode (Instant Access)", use_container_width=True):
+                st.session_state.logged_in = True
+                st.session_state.user_name = "Srija S (Project Lead)"
+                st.session_state.user_email = "srijasavara2005@gmail.com"
+                st.rerun()
+
         with register_tab:
             st.subheader("New User Registration")
             st.caption("Create an account to start valuing properties.")
