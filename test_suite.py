@@ -285,6 +285,60 @@ assert abs(total_repay - (principal + total_interest)) < 0.01
 print(f"  ✓ EMI Formula verified: Principal {principal:,.0f}, Rate {rate}%, Tenure {tenure_years} yrs -> Monthly EMI {emi:,.2f}")
 print("  ✓ Budget and Affordability Status logic verified (FITS, CLOSE, EXCEEDS)")
 
+# TEST 8: USER AVAILABLE BUDGET & DYNAMIC AFFORDABLE RECOMMENDATIONS
+print("\n[TEST 8] Testing User Available Budget & Dynamic Affordable Recommendations...")
+
+# 8.1 India: Low Budget (₹25,00,000) vs High Budget (₹1,20,00,000)
+rec_low_in, aff_low_in = app.calculate_affordable_configuration(2500000, "India")
+assert rec_low_in["house_model"] in ["Compact House", "Simple Family House"]
+assert rec_low_in["bedrooms"] <= 2
+assert rec_low_in["floors"] == "1 Floor"
+print(f"  ✓ India Low Budget (₹25L): Recommended {rec_low_in['house_model']} ({rec_low_in['bedrooms']} Beds, {rec_low_in['floors']}) - Cost: ₹{rec_low_in['total_cost']:,.0f}")
+
+rec_high_in, aff_high_in = app.calculate_affordable_configuration(12000000, "India")
+assert rec_high_in["house_model"] == "Luxury Villa"
+assert rec_high_in["bedrooms"] >= 4
+assert rec_high_in["floors"] == "3 Floors"
+assert "Private Swimming Pool & Sun Deck" in rec_high_in["amenities"]
+print(f"  ✓ India High Budget (₹1.2Cr): Recommended {rec_high_in['house_model']} ({rec_high_in['bedrooms']} Beds, {rec_high_in['floors']}) - Cost: ₹{rec_high_in['total_cost']:,.0f}")
+
+# 8.2 USA: $120,000 vs $900,000
+rec_low_us, _ = app.calculate_affordable_configuration(120000, "USA")
+assert rec_low_us["house_model"] == "Compact House"
+rec_high_us, _ = app.calculate_affordable_configuration(900000, "USA")
+assert rec_high_us["house_model"] == "Luxury Villa"
+print(f"  ✓ USA Currency Budget ($): Low $120k -> {rec_low_us['house_model']} | High $900k -> {rec_high_us['house_model']}")
+
+# 8.3 3D Geometry Dynamic Reaction to Budget
+fig_low_3d = app.generate_architectural_house_3d(
+    house_model=rec_low_in["house_model"],
+    bhk=f"{rec_low_in['bedrooms']} BHK",
+    floors=rec_low_in["floors"],
+    view_mode="🏡 Exterior View (Full House + Roof)",
+    parking_spaces=rec_low_in["parking"],
+    kitchen_count=rec_low_in["kitchens"],
+    dining_count=rec_low_in["dinings"],
+    balcony_count=rec_low_in["balconies"],
+    bedroom_count=rec_low_in["bedrooms"],
+    bathroom_count=rec_low_in["bathrooms"],
+    additional_features=rec_low_in["amenities"]
+)
+fig_high_3d = app.generate_architectural_house_3d(
+    house_model=rec_high_in["house_model"],
+    bhk=f"{rec_high_in['bedrooms']} BHK",
+    floors=rec_high_in["floors"],
+    view_mode="🏡 Exterior View (Full House + Roof)",
+    parking_spaces=rec_high_in["parking"],
+    kitchen_count=rec_high_in["kitchens"],
+    dining_count=rec_high_in["dinings"],
+    balcony_count=rec_high_in["balconies"],
+    bedroom_count=rec_high_in["bedrooms"],
+    bathroom_count=rec_high_in["bathrooms"],
+    additional_features=rec_high_in["amenities"]
+)
+assert len(fig_low_3d.data) != len(fig_high_3d.data), "3D geometry must dynamically differ between budget recommendations"
+print(f"  ✓ 3D Geometry dynamically reacts to budget: Low Budget Traces ({len(fig_low_3d.data)}) vs High Budget Traces ({len(fig_high_3d.data)})")
+
 print("\n" + "=" * 70)
 print("ALL COMPREHENSIVE TESTS PASSED WITH 100% SUCCESS!")
 print("=" * 70)

@@ -676,6 +676,147 @@ def calculate_eco_score(additional_features, living_area, house_model):
         
     return eco_stars, rounded_eco, eco_tag
 
+def calculate_affordable_configuration(budget, country_name):
+    country_cfg = get_country_config(country_name)
+    sqft_rate = country_cfg["construction_rate_sqft"]
+    
+    candidates = [
+        {
+            "tier_name": "Luxury Estate Package",
+            "house_model": "Luxury Villa",
+            "bedrooms": 4,
+            "bathrooms": 4,
+            "floors": "3 Floors",
+            "parking": 2,
+            "kitchens": 1,
+            "dinings": 1,
+            "balconies": 2,
+            "quality": "Luxury",
+            "living_area": 2400,
+            "amenities": ["Landscaped Garden / Open Space", "Rooftop Solar Panels", "Dedicated Home Office / Study", "Private Swimming Pool & Sun Deck"],
+            "description": "4 BHK Grand Luxury Villa across 3 floors with private swimming pool, solar power, home office, and luxury finishes."
+        },
+        {
+            "tier_name": "Executive Modern Villa",
+            "house_model": "Modern House",
+            "bedrooms": 4,
+            "bathrooms": 3,
+            "floors": "2 Floors",
+            "parking": 2,
+            "kitchens": 1,
+            "dinings": 1,
+            "balconies": 2,
+            "quality": "Premium",
+            "living_area": 2100,
+            "amenities": ["Landscaped Garden / Open Space", "Rooftop Solar Panels", "Dedicated Home Office / Study", "Terrace Garden & Pergola"],
+            "description": "4 BHK Modern House across 2 floors with minimalist cubic lines, rooftop terrace pergola, home office, and solar array."
+        },
+        {
+            "tier_name": "Contemporary Family Home",
+            "house_model": "Contemporary House",
+            "bedrooms": 3,
+            "bathrooms": 2,
+            "floors": "2 Floors",
+            "parking": 2,
+            "kitchens": 1,
+            "dinings": 1,
+            "balconies": 2,
+            "quality": "Standard",
+            "living_area": 1900,
+            "amenities": ["Landscaped Garden / Open Space", "Rooftop Solar Panels", "Dedicated Home Office / Study"],
+            "description": "3 BHK Contemporary 2-story home with dual balconies, home office, solar panels, and balanced family living spaces."
+        },
+        {
+            "tier_name": "Comfort Traditional Home",
+            "house_model": "Traditional House",
+            "bedrooms": 3,
+            "bathrooms": 2,
+            "floors": "1 Floor",
+            "parking": 1,
+            "kitchens": 1,
+            "dinings": 1,
+            "balconies": 1,
+            "quality": "Standard",
+            "living_area": 1400,
+            "amenities": ["Landscaped Garden / Open Space", "Rooftop Solar Panels"],
+            "description": "3 BHK Single-level Traditional home with classical hipped roof, covered porch, garden, and solar power."
+        },
+        {
+            "tier_name": "Standard Family Home",
+            "house_model": "Simple Family House",
+            "bedrooms": 2,
+            "bathrooms": 2,
+            "floors": "1 Floor",
+            "parking": 1,
+            "kitchens": 1,
+            "dinings": 1,
+            "balconies": 1,
+            "quality": "Standard",
+            "living_area": 1100,
+            "amenities": ["Landscaped Garden / Open Space"],
+            "description": "2 BHK Simple Family single-floor house with open living lounge, gabled roof, dedicated parking, and private garden."
+        },
+        {
+            "tier_name": "Compact Starter Home",
+            "house_model": "Compact House",
+            "bedrooms": 2,
+            "bathrooms": 1,
+            "floors": "1 Floor",
+            "parking": 1,
+            "kitchens": 1,
+            "dinings": 1,
+            "balconies": 1,
+            "quality": "Basic",
+            "living_area": 850,
+            "amenities": ["Landscaped Garden / Open Space"],
+            "description": "2 BHK Compact starter house with smart space utilization, mono-pitch shed roof, and minimal structural footprint."
+        },
+        {
+            "tier_name": "Minimalist Studio / 1 BHK",
+            "house_model": "Compact House",
+            "bedrooms": 1,
+            "bathrooms": 1,
+            "floors": "1 Floor",
+            "parking": 1,
+            "kitchens": 1,
+            "dinings": 0,
+            "balconies": 0,
+            "quality": "Basic",
+            "living_area": 600,
+            "amenities": [],
+            "description": "1 BHK Minimalist starter unit prioritizing essential living area, kitchenette, and single-bay parking."
+        }
+    ]
+
+    selected_cand = None
+    for cand in candidates:
+        fl_int = int(cand["floors"].split()[0])
+        b_rate = sqft_rate * quality_multipliers.get(cand["quality"], 1.0)
+        c_struct = cand["living_area"] * b_rate
+        c_beds = cand["bedrooms"] * country_cfg["cost_bedroom"]
+        c_baths = cand["bathrooms"] * country_cfg["cost_bathroom"]
+        c_parks = cand["parking"] * country_cfg["cost_parking"]
+        c_kitch = cand["kitchens"] * country_cfg["cost_kitchen"]
+        c_din = cand["dinings"] * country_cfg["cost_dining"]
+        c_balc = cand["balconies"] * country_cfg["cost_balcony"]
+        c_extra_flr = max(0, fl_int - 1) * cand["living_area"] * country_cfg["cost_floor_extra"]
+        c_base = c_struct + c_beds + c_baths + c_parks + c_kitch + c_din + c_balc + c_extra_flr
+        c_amen = sum(country_cfg["opt_costs"].get(a, 0) for a in cand["amenities"])
+        cand["total_cost"] = c_base + c_amen
+        cand["base_cost"] = c_base
+        cand["amenities_cost"] = c_amen
+
+        if budget >= cand["total_cost"] and selected_cand is None:
+            selected_cand = cand
+
+    if selected_cand is None:
+        selected_cand = candidates[-1]
+        is_fully_affordable = (budget >= selected_cand["total_cost"])
+    else:
+        is_fully_affordable = True
+
+    return selected_cand, is_fully_affordable
+
 # =========================================================
 # 4-TIER HIERARCHICAL LOCATION SYSTEM (WORLDWIDE 196+ COUNTRIES)
 # =========================================================
@@ -1963,13 +2104,14 @@ plan_col1, plan_col2 = st.columns(2)
 
 with plan_col1:
     user_budget = st.number_input(
-        f"💰 User Budget ({curr_symbol})",
+        f"💰 Available Budget ({curr_symbol})",
         min_value=0,
         value=country_cfg["budget_default"],
         step=country_cfg["budget_step"],
-        help="Enter your planned or available budget in your active currency"
+        help="Enter how much money you currently have available for the house/property in your active currency"
     )
     available_budget = user_budget
+    st.caption(f"**Available Budget:** {format_currency_value(user_budget, selected_country)} ({number_to_words(user_budget, selected_country)})")
     parking_spaces = st.number_input("Parking Spaces", min_value=0, max_value=5, value=2)
     kitchen_count = st.number_input("Number of Kitchens", min_value=1, max_value=4, value=1)
 
@@ -2101,6 +2243,7 @@ if st.button("🔮 Calculate Property Valuation & Synthesize AI House Plan", use
         remaining_budget = net_budget
         budget_shortfall = 0.0
         is_within_budget = True
+        simple_budget_status = "✅ Budget Sufficient"
         affordability_status = "FITS BUDGET"
         affordability_icon = "🟢"
         affordability_color = "#16a34a"
@@ -2109,6 +2252,7 @@ if st.button("🔮 Calculate Property Valuation & Synthesize AI House Plan", use
         remaining_budget = 0.0
         budget_shortfall = abs(net_budget)
         is_within_budget = False
+        simple_budget_status = "⚠️ Additional Amount Required"
         shortfall_ratio = budget_shortfall / max(1.0, float(user_budget))
         if shortfall_ratio <= 0.15:
             affordability_status = "CLOSE TO BUDGET"
@@ -2120,6 +2264,8 @@ if st.button("🔮 Calculate Property Valuation & Synthesize AI House Plan", use
             affordability_icon = "🔴"
             affordability_color = "#dc2626"
             affordability_class = "afford-badge-exceeds"
+
+    affordable_rec, is_fully_affordable = calculate_affordable_configuration(user_budget, selected_country)
 
     cost_breakdown_dict = {
         "Structure & Living Area": cost_structure,
@@ -2201,10 +2347,13 @@ if st.button("🔮 Calculate Property Valuation & Synthesize AI House Plan", use
     st.session_state.shortfall_words = shortfall_words
 
     st.session_state.is_within_budget = is_within_budget
+    st.session_state.simple_budget_status = simple_budget_status
     st.session_state.affordability_status = affordability_status
     st.session_state.affordability_icon = affordability_icon
     st.session_state.affordability_color = affordability_color
     st.session_state.affordability_class = affordability_class
+    st.session_state.affordable_rec = affordable_rec
+    st.session_state.is_fully_affordable = is_fully_affordable
 
     st.session_state.bhk = f"{selected_house_model} - {recommended_bhk}"
     st.session_state.floors = recommended_floors
@@ -2339,71 +2488,156 @@ if st.session_state.prediction is not None:
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # 3. AFFORDABILITY & BUDGET HEALTH ANALYSIS
+    # 3. USER BUDGET & AFFORDABILITY HEALTH ENGINE
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-    st.markdown('<div class="card-title">💰 AFFORDABILITY & TOTAL PROJECT BUDGET HEALTH</div>', unsafe_allow_html=True)
+    st.markdown('<div class="card-title">💰 USER BUDGET, VALUATION & AFFORDABILITY ENGINE</div>', unsafe_allow_html=True)
 
-    b_col1, b_col2, b_col3 = st.columns([1.2, 1.2, 1.2])
-    with b_col1:
-        st.markdown(f"""
-            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 1.25rem; height: 100%;">
-                <div style="font-size: 0.82rem; color: #64748b; font-weight: 700; text-transform: uppercase;">💼 Total Estimated Project Cost</div>
-                <div style="font-size: 1.85rem; font-weight: 800; color: #0284c7; margin: 0.25rem 0;">{st.session_state.formatted_total}</div>
-                <div style="font-size: 0.88rem; font-weight: 600; color: #475569; margin-top: 0.35rem;">
-                    <b>In Words:</b> {st.session_state.total_words}
-                </div>
-            </div>
-        """, unsafe_allow_html=True)
-    with b_col2:
-        st.markdown(f"""
-            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 1.25rem; height: 100%;">
-                <div style="font-size: 0.82rem; color: #64748b; font-weight: 700; text-transform: uppercase;">💰 User Planned Budget</div>
-                <div style="font-size: 1.85rem; font-weight: 800; color: #0f172a; margin: 0.25rem 0;">{st.session_state.formatted_budget}</div>
-                <div style="font-size: 0.88rem; font-weight: 600; color: #475569; margin-top: 0.35rem;">
-                    <b>In Words:</b> {st.session_state.budget_words}
-                </div>
-            </div>
-        """, unsafe_allow_html=True)
-    with b_col3:
-        st.markdown(f"""
-            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 1.25rem; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
-                <div style="font-size: 0.82rem; color: #64748b; font-weight: 700; text-transform: uppercase; margin-bottom: 0.6rem;">📊 Affordability Status</div>
-                <div class="{st.session_state.affordability_class}">
-                    <span>{st.session_state.affordability_icon}</span> {st.session_state.affordability_status}
-                </div>
-            </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    # Dynamic Advisory Status Banner
+    # Simple Budget Status Banner
     if st.session_state.is_within_budget:
         st.markdown(f"""
-            <div style="background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 14px; padding: 1.25rem;">
-                <div style="font-size: 1.05rem; font-weight: 700; color: #166534;">🟢 Within Budget • Surplus Available</div>
-                <div style="font-size: 1rem; color: #15803d; margin-top: 0.4rem; line-height: 1.5;">
-                    Your planned budget of <b>{st.session_state.formatted_budget}</b> comfortably covers the total estimated project cost of <b>{st.session_state.formatted_total}</b> with a remaining budget surplus of <b>{st.session_state.formatted_remaining}</b> (<b>{st.session_state.remaining_words}</b>).
+            <div style="background: #f0fdf4; border: 2px solid #22c55e; border-radius: 14px; padding: 1.25rem; margin-bottom: 1.25rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                    <div style="font-size: 1.25rem; font-weight: 800; color: #15803d;">✅ Budget Sufficient</div>
+                    <div style="background: #dcfce7; color: #166534; padding: 0.35rem 0.85rem; border-radius: 20px; font-weight: 700; font-size: 0.9rem;">
+                        Surplus: {st.session_state.formatted_remaining}
+                    </div>
                 </div>
-            </div>
-        """, unsafe_allow_html=True)
-    elif st.session_state.affordability_status == "CLOSE TO BUDGET":
-        st.markdown(f"""
-            <div style="background: #fffbeb; border: 1.5px solid #fde68a; border-radius: 14px; padding: 1.25rem;">
-                <div style="font-size: 1.05rem; font-weight: 700; color: #b45309;">🟡 Close to Budget (Within 15%) • Shortfall: {st.session_state.formatted_shortfall}</div>
-                <div style="font-size: 0.98rem; color: #92400e; margin-top: 0.4rem; line-height: 1.5;">
-                    Total project cost of <b>{st.session_state.formatted_total}</b> slightly exceeds your planned budget of <b>{st.session_state.formatted_budget}</b> by <b>{st.session_state.formatted_shortfall}</b> (<b>{st.session_state.shortfall_words}</b>). Minor adjustments in the Requirement Optimizer below can bring your project comfortably within budget.
+                <div style="font-size: 0.95rem; color: #166534; margin-top: 0.5rem; line-height: 1.5;">
+                    Your available budget of <b>{st.session_state.formatted_budget}</b> comfortably covers the total required amount of <b>{st.session_state.formatted_total}</b> with a remaining surplus of <b>{st.session_state.formatted_remaining}</b> (<b>{st.session_state.remaining_words}</b>).
                 </div>
             </div>
         """, unsafe_allow_html=True)
     else:
         st.markdown(f"""
-            <div style="background: #fef2f2; border: 1.5px solid #fca5a5; border-radius: 14px; padding: 1.25rem;">
-                <div style="font-size: 1.05rem; font-weight: 700; color: #991b1b;">🔴 Exceeds Budget • Shortfall: {st.session_state.formatted_shortfall}</div>
-                <div style="font-size: 0.98rem; color: #b91c1c; margin-top: 0.4rem; line-height: 1.5;">
-                    Total project cost of <b>{st.session_state.formatted_total}</b> exceeds your planned budget of <b>{st.session_state.formatted_budget}</b> by <b>{st.session_state.formatted_shortfall}</b> (<b>{st.session_state.shortfall_words}</b>). Review the value-engineering recommendations in the Requirement Optimizer below to balance your design and budget.
+            <div style="background: #fef2f2; border: 2px solid #ef4444; border-radius: 14px; padding: 1.25rem; margin-bottom: 1.25rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                    <div style="font-size: 1.25rem; font-weight: 800; color: #b91c1c;">⚠️ Additional Amount Required</div>
+                    <div style="background: #fee2e2; color: #991b1b; padding: 0.35rem 0.85rem; border-radius: 20px; font-weight: 700; font-size: 0.9rem;">
+                        Shortfall: {st.session_state.formatted_shortfall}
+                    </div>
+                </div>
+                <div style="font-size: 0.95rem; color: #991b1b; margin-top: 0.5rem; line-height: 1.5;">
+                    Total required amount of <b>{st.session_state.formatted_total}</b> exceeds your entered available budget of <b>{st.session_state.formatted_budget}</b> by <b>{st.session_state.formatted_shortfall}</b> (<b>{st.session_state.shortfall_words}</b>). Check the budget-affordable house design below!
                 </div>
             </div>
         """, unsafe_allow_html=True)
+
+    # 6 Core Financial Metric Cards (Explicitly presenting the required calculations 1-6)
+    f_c1, f_c2, f_c3 = st.columns(3)
+    with f_c1:
+        st.markdown(f"""
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1rem; margin-bottom: 0.75rem;">
+                <div style="font-size: 0.78rem; color: #64748b; font-weight: 700; text-transform: uppercase;">1. User Available Budget</div>
+                <div style="font-size: 1.55rem; font-weight: 800; color: #0f172a; margin: 0.25rem 0;">{st.session_state.formatted_budget}</div>
+                <div style="font-size: 0.8rem; color: #475569;"><b>In Words:</b> {st.session_state.budget_words}</div>
+            </div>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1rem;">
+                <div style="font-size: 0.78rem; color: #64748b; font-weight: 700; text-transform: uppercase;">4. Total Required Amount</div>
+                <div style="font-size: 1.55rem; font-weight: 800; color: #0284c7; margin: 0.25rem 0;">{st.session_state.formatted_total}</div>
+                <div style="font-size: 0.8rem; color: #475569;"><b>In Words:</b> {st.session_state.total_words}</div>
+            </div>
+        """, unsafe_allow_html=True)
+        
+    with f_c2:
+        st.markdown(f"""
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1rem; margin-bottom: 0.75rem;">
+                <div style="font-size: 0.78rem; color: #64748b; font-weight: 700; text-transform: uppercase;">2. Estimated Property Price (ML)</div>
+                <div style="font-size: 1.55rem; font-weight: 800; color: #2563eb; margin: 0.25rem 0;">{st.session_state.formatted_price}</div>
+                <div style="font-size: 0.8rem; color: #475569;"><b>In Words:</b> {st.session_state.price_words}</div>
+            </div>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1rem;">
+                <div style="font-size: 0.78rem; color: #16a34a; font-weight: 700; text-transform: uppercase;">5. Remaining Amount (If Sufficient)</div>
+                <div style="font-size: 1.55rem; font-weight: 800; color: {'#16a34a' if st.session_state.is_within_budget else '#94a3b8'}; margin: 0.25rem 0;">
+                    {st.session_state.formatted_remaining if st.session_state.is_within_budget else '— (Shortfall)'}
+                </div>
+                <div style="font-size: 0.8rem; color: #475569;">
+                    <b>Status:</b> {'Surplus Available' if st.session_state.is_within_budget else 'Budget Insufficient'}
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+
+    with f_c3:
+        st.markdown(f"""
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1rem; margin-bottom: 0.75rem;">
+                <div style="font-size: 0.78rem; color: #64748b; font-weight: 700; text-transform: uppercase;">3. Estimated Construction Cost</div>
+                <div style="font-size: 1.55rem; font-weight: 800; color: #d97706; margin: 0.25rem 0;">{st.session_state.formatted_base_cost}</div>
+                <div style="font-size: 0.8rem; color: #475569;"><b>In Words:</b> {st.session_state.base_cost_words}</div>
+            </div>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1rem;">
+                <div style="font-size: 0.78rem; color: #dc2626; font-weight: 700; text-transform: uppercase;">6. Shortfall Amount (If Insufficient)</div>
+                <div style="font-size: 1.55rem; font-weight: 800; color: {'#dc2626' if not st.session_state.is_within_budget else '#94a3b8'}; margin: 0.25rem 0;">
+                    {st.session_state.formatted_shortfall if not st.session_state.is_within_budget else '— (Sufficient)'}
+                </div>
+                <div style="font-size: 0.8rem; color: #475569;">
+                    <b>Status:</b> {'Additional Funds Needed' if not st.session_state.is_within_budget else 'Zero Shortfall'}
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+
+    # 7. WHAT HOUSE REQUIREMENTS ARE AFFORDABLE WITHIN USER BUDGET
+    st.markdown("<br>", unsafe_allow_html=True)
+    aff_rec = st.session_state.affordable_rec
+    formatted_aff_cost = format_currency_value(aff_rec['total_cost'], selected_country)
+    aff_cost_words = number_to_words(aff_rec['total_cost'], selected_country)
+    
+    st.markdown(f"""
+        <div style="background: linear-gradient(135deg, #0f172a, #1e293b); color: white; border-radius: 14px; padding: 1.5rem; border: 1px solid #334155; margin-bottom: 1.25rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; border-bottom: 1px solid #334155; padding-bottom: 0.85rem;">
+                <div>
+                    <div style="font-size: 1.25rem; font-weight: 800; color: #38bdf8;">🏡 7. What House Requirements Are Affordable Within Your Budget</div>
+                    <div style="font-size: 0.9rem; color: #94a3b8; margin-top: 0.2rem;">Dynamically synthesized architectural configuration fitting your available budget of <b>{st.session_state.formatted_budget}</b></div>
+                </div>
+                <div style="background: #0284c7; color: white; padding: 0.4rem 1rem; border-radius: 20px; font-weight: 700; font-size: 0.95rem;">
+                    {aff_rec['tier_name']}
+                </div>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-top: 1.25rem;">
+                <div style="background: rgba(255,255,255,0.06); padding: 0.75rem 1rem; border-radius: 10px; border-left: 3px solid #38bdf8;">
+                    <div style="font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; font-weight: 700;">🏛️ House Model</div>
+                    <div style="font-size: 1.1rem; font-weight: 800; color: #f8fafc; margin-top: 0.2rem;">{aff_rec['house_model']}</div>
+                </div>
+                <div style="background: rgba(255,255,255,0.06); padding: 0.75rem 1rem; border-radius: 10px; border-left: 3px solid #10b981;">
+                    <div style="font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; font-weight: 700;">🛏️ Bedrooms</div>
+                    <div style="font-size: 1.1rem; font-weight: 800; color: #f8fafc; margin-top: 0.2rem;">{aff_rec['bedrooms']} Bedrooms</div>
+                </div>
+                <div style="background: rgba(255,255,255,0.06); padding: 0.75rem 1rem; border-radius: 10px; border-left: 3px solid #f59e0b;">
+                    <div style="font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; font-weight: 700;">🚿 Bathrooms</div>
+                    <div style="font-size: 1.1rem; font-weight: 800; color: #f8fafc; margin-top: 0.2rem;">{aff_rec['bathrooms']} Bathrooms</div>
+                </div>
+                <div style="background: rgba(255,255,255,0.06); padding: 0.75rem 1rem; border-radius: 10px; border-left: 3px solid #a855f7;">
+                    <div style="font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; font-weight: 700;">🏢 Building Levels</div>
+                    <div style="font-size: 1.1rem; font-weight: 800; color: #f8fafc; margin-top: 0.2rem;">{aff_rec['floors']}</div>
+                </div>
+                <div style="background: rgba(255,255,255,0.06); padding: 0.75rem 1rem; border-radius: 10px; border-left: 3px solid #ec4899;">
+                    <div style="font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; font-weight: 700;">🚗 Parking Spaces</div>
+                    <div style="font-size: 1.1rem; font-weight: 800; color: #f8fafc; margin-top: 0.2rem;">{aff_rec['parking']} Bays</div>
+                </div>
+                <div style="background: rgba(255,255,255,0.06); padding: 0.75rem 1rem; border-radius: 10px; border-left: 3px solid #06b6d4;">
+                    <div style="font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; font-weight: 700;">🌅 Balconies</div>
+                    <div style="font-size: 1.1rem; font-weight: 800; color: #f8fafc; margin-top: 0.2rem;">{aff_rec['balconies']} Balconies</div>
+                </div>
+                <div style="background: rgba(255,255,255,0.06); padding: 0.75rem 1rem; border-radius: 10px; border-left: 3px solid #eab308;">
+                    <div style="font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; font-weight: 700;">⭐ Construction Quality</div>
+                    <div style="font-size: 1.1rem; font-weight: 800; color: #f8fafc; margin-top: 0.2rem;">{aff_rec['quality']} Tier</div>
+                </div>
+                <div style="background: rgba(255,255,255,0.06); padding: 0.75rem 1rem; border-radius: 10px; border-left: 3px solid #84cc16;">
+                    <div style="font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; font-weight: 700;">📐 Living Area</div>
+                    <div style="font-size: 1.1rem; font-weight: 800; color: #f8fafc; margin-top: 0.2rem;">{aff_rec['living_area']:,} sq ft</div>
+                </div>
+            </div>
+            
+            <div style="margin-top: 1rem; padding: 0.85rem 1.1rem; background: rgba(255,255,255,0.04); border-radius: 10px;">
+                <div style="font-size: 0.85rem; color: #94a3b8; font-weight: 700;">🌿 Affordable Optional Amenities:</div>
+                <div style="font-size: 0.95rem; color: #e2e8f0; margin-top: 0.25rem;">
+                    {', '.join(aff_rec['amenities']) if aff_rec['amenities'] else 'None (Essential Core Structure Only)'}
+                </div>
+                <div style="font-size: 0.88rem; color: #67e8f9; margin-top: 0.5rem; font-weight: 600;">
+                    💡 Estimated Affordable Configuration Cost: <b>{formatted_aff_cost}</b> ({aff_cost_words})
+                </div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
 
     # Itemized Cost Breakdown Table
     with st.expander("📊 View Itemized Cost Breakdown (Base Construction vs Luxury Amenities)", expanded=False):
@@ -2527,9 +2761,45 @@ if st.session_state.prediction is not None:
     # 6. GENERATED REAL DYNAMIC 3D HOUSE MODEL
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
     st.markdown('<div class="card-title">🏗️ GENERATED 3D ARCHITECTURAL HOUSE PLANNER</div>', unsafe_allow_html=True)
-    st.write(f"Dynamic architectural model synthesized for **{selected_house_model}** based on your exact requirements ({st.session_state.floors}, {bedroom_abvgr} Beds, {full_bath} Baths, {parking_spaces} Parking, {balcony_count} Balconies).")
 
-    floor_cnt = int(st.session_state.floors.split()[0])
+    aff_rec = st.session_state.affordable_rec
+    formatted_aff_cost = format_currency_value(aff_rec['total_cost'], selected_country)
+
+    model_scene_choice = st.radio(
+        "🎨 3D Architectural Scene Model:",
+        [
+            f"🏡 Current Planned Requirements ({selected_house_model} • {st.session_state.floors} • {bedroom_abvgr} Beds • Cost: {st.session_state.formatted_total})",
+            f"💰 Budget-Affordable Design ({aff_rec['house_model']} • {aff_rec['floors']} • {aff_rec['bedrooms']} Beds • Cost: {formatted_aff_cost})"
+        ],
+        index=0 if st.session_state.is_within_budget else 1,
+        help="Switch between your custom planned specifications and the automatically synthesized budget-affordable architectural design."
+    )
+
+    if "Budget-Affordable" in model_scene_choice:
+        model_3d = aff_rec["house_model"]
+        bhk_3d = f"{aff_rec['bedrooms']} BHK ({aff_rec['tier_name']})"
+        floors_3d = aff_rec["floors"]
+        beds_3d = aff_rec["bedrooms"]
+        baths_3d = aff_rec["bathrooms"]
+        parks_3d = aff_rec["parking"]
+        balcs_3d = aff_rec["balconies"]
+        amenities_3d = aff_rec["amenities"]
+        st.info(f"✨ **Active 3D Scene:** Displaying **{model_3d}** synthesized to fit strictly within your available budget of **{st.session_state.formatted_budget}** (Total Cost: {formatted_aff_cost}).")
+    else:
+        model_3d = selected_house_model
+        bhk_3d = st.session_state.bhk
+        floors_3d = st.session_state.floors
+        beds_3d = bedroom_abvgr
+        baths_3d = full_bath
+        parks_3d = parking_spaces
+        balcs_3d = balcony_count
+        amenities_3d = st.session_state.additional_features
+        if not st.session_state.is_within_budget:
+            st.warning(f"⚠️ **Note:** This planned design exceeds your budget by {st.session_state.formatted_shortfall}. Switch to the **Budget-Affordable Design** above to view the affordable 3D geometry.")
+
+    st.write(f"Dynamic architectural model synthesized for **{model_3d}** ({floors_3d}, {beds_3d} Beds, {baths_3d} Baths, {parks_3d} Parking, {balcs_3d} Balconies).")
+
+    floor_cnt = int(floors_3d.split()[0])
     floor_count = floor_cnt
     
     view_options = [
@@ -2556,18 +2826,18 @@ if st.session_state.prediction is not None:
         )
 
     fig3d = generate_architectural_house_3d(
-        house_model=selected_house_model,
-        bhk=st.session_state.bhk,
-        floors=st.session_state.floors,
+        house_model=model_3d,
+        bhk=bhk_3d,
+        floors=floors_3d,
         view_mode=sel_view_mode,
-        parking_spaces=parking_spaces,
+        parking_spaces=parks_3d,
         kitchen_count=kitchen_count,
         dining_count=dining_count,
-        balcony_count=balcony_count,
-        bedroom_count=bedroom_abvgr,
-        bathroom_count=full_bath,
+        balcony_count=balcs_3d,
+        bedroom_count=beds_3d,
+        bathroom_count=baths_3d,
         camera_angle=sel_camera_angle,
-        additional_features=st.session_state.additional_features
+        additional_features=amenities_3d
     )
 
     render_plotly_chart(fig3d, config={"scrollZoom": True, "displaylogo": False, "responsive": True})
